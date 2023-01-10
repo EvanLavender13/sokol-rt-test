@@ -1,0 +1,9 @@
+add_definitions(-D${sokol_backend})
+
+fips_begin_app(app windowed)
+    fips_files(main.c)
+    # sokol_shader(../res/test-shader.glsl ${slang})
+    # fips_deps(sokol cimgui cdbgui par stb flecs util)
+    fips_deps(sokol cimgui)
+fips_end_app()
+# target_compile_definitions(app PRIVATE USE_DBG_UI)
