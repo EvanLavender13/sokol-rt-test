@@ -7,14 +7,9 @@
 #include "sokol_imgui.h"
 #include "sokol_time.h"
 
+#include "camera.h"
+#include "config.h"
 #include "render.h"
-
-#define UNUSED(x) (void)(x)
-
-#define ASPECT_RATIO (16.0f / 9.0f)
-#define IMAGE_WIDTH (1200)
-// #define IMAGE_HEIGHT ((int) (IMAGE_WIDTH / ASPECT_RATIO))
-#define IMAGE_HEIGHT (800)
 
 static struct {
     sg_pass_action pass_action;
@@ -23,6 +18,8 @@ static struct {
     uint32_t pixels[IMAGE_WIDTH][IMAGE_HEIGHT];
     uint64_t last_time;
     double last_render_time;
+
+    Camera camera;
 } State;
 
 void frame_gui();
@@ -37,14 +34,12 @@ void init()
     simgui_setup(&(simgui_desc_t) { 0 });
     stm_setup();
 
-    printf("IMAGE_WIDTH [%i]\n", IMAGE_WIDTH);
-    printf("IMAGE_HEIGHT [%i]\n", IMAGE_HEIGHT);
-
     State.image = sg_make_image(&(sg_image_desc)
     {
         .width = IMAGE_WIDTH,
         .height = IMAGE_HEIGHT,
         .usage = SG_USAGE_STREAM,
+        .pixel_format = SG_PIXELFORMAT_RGBA8,
         .label = "image-texture"
     });
 
@@ -57,11 +52,14 @@ void init()
             .value = { 0.5f, 0.5f, 0.5f, 1.0f } 
         }
     };
+
+    camera_init(&State.camera);
 }
 
 void frame() 
 {
-    frame_update();
+    camera_update(&State.camera, IMAGE_WIDTH, IMAGE_HEIGHT);
+    // frame_update();
 
     // draw texture quad
     sgl_viewport(0, 0, sapp_width(), sapp_height(), true);
@@ -79,13 +77,6 @@ void frame()
     sgl_draw();
 
     // draw gui
-    simgui_new_frame(&(simgui_frame_desc_t)
-    {
-        .width = sapp_width(),
-        .height = sapp_height(),
-        .delta_time = sapp_frame_duration(),
-        .dpi_scale = sapp_dpi_scale()
-    });
     frame_gui();
     simgui_render();    
 
@@ -95,7 +86,7 @@ void frame()
 
 void frame_update()
 {
-    render(State.pixels[0], IMAGE_WIDTH, IMAGE_HEIGHT);
+    render(State.pixels[0], &State.camera);
     sg_update_image(State.image, &(sg_image_data)
     {
         .subimage[0][0] = SG_RANGE(State.pixels)
@@ -107,6 +98,14 @@ void frame_update()
 
 void frame_gui()
 {
+    simgui_new_frame(&(simgui_frame_desc_t)
+    {
+        .width = sapp_width(),
+        .height = sapp_height(),
+        .delta_time = sapp_frame_duration(),
+        .dpi_scale = sapp_dpi_scale()
+    });
+        
     igSetNextWindowSize((ImVec2) { 450, 320 }, ImGuiCond_FirstUseEver);
     igBegin("Settings", NULL, 0);
     igText("Last render: %.3fms", sapp_frame_duration());
