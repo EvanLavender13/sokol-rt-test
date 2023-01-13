@@ -1,99 +1,138 @@
 #ifndef LAVS_CAMERA_H_
 #define LAVS_CAMERA_H_
 
+#include "math.h"
+#include "sokol_app.h"
 #include "sx/sx/math-vec.h"
 #include "config.h"
 #include "ray.h"
 
 typedef struct 
 {
-    // mat4 projection;
-    // mat4 view;
-    // mat4 inv_projection;
-    // mat4 inv_view;
+    sx_mat4 projection;
+    sx_mat4 view;
+    sx_mat4 inv_projection;
+    sx_mat4 inv_view;
 
-    // float vertical_fov;
-    // float near_clip;
-    // float far_clip;
+    float vertical_fov;
+    float near_clip;
+    float far_clip;
 
+    sx_vec3 center;
     sx_vec3 position;
-    // vec3 forward;
+    sx_vec3 forward;
+    sx_vec3 up;
+
+    float distance;
+    float latitude;
+    float longitude;
 
     uint32_t viewport_width;
     uint32_t viewport_height;
 
-    Ray rays[IMAGE_WIDTH * IMAGE_HEIGHT];
+    sx_vec3 ray_directions[IMAGE_WIDTH * IMAGE_HEIGHT];
 } Camera;
+
+typedef struct
+{
+    sx_vec2 mouse_position;
+    sx_vec2 last_mouse_position;
+    sx_vec3 movement;
+} CameraInput;
 
 void calculate_projection(Camera *camera);
 void calculate_view(Camera *camera);
 void calculate_rays(Camera *camera);
 
-void camera_init(Camera *camera)
+void camera_init(Camera *camera, uint32_t width, uint32_t height)
 {
-    // camera->vertical_fov = 45.0f;
-    // camera->near_clip = 0.1f;
-    // camera->far_clip = 100.0f;
-
-    // glm_vec3_copy((vec3) { 0.0f, 0.0f, -1.0f }, camera->forward);
-    // glm_vec3_copy((vec3) { 0.0f, 0.0f, 3.0f}, camera->position);
-}
-
-void camera_update(Camera *camera, uint32_t width, uint32_t height)
-{
-    if (width == camera->viewport_width && height == camera->viewport_height)
-    {
-        return;
-    }
-
+    camera->vertical_fov = 45.0f;
+    camera->near_clip = 0.1f;
+    camera->far_clip = 100.0f;
+    camera->center = sx_vec3f(0.0f, 0.0f, 0.0f);
+    camera->position = sx_vec3f(0.0f, 0.0f, 3.0f);
+    camera->forward = sx_vec3f(0.0f, 0.0f, -1.0f);
+    camera->up = sx_vec3f(0.0f, 1.0f, 0.0f);
+    camera->distance = 5.0f;
+    camera->latitude = 0.0f;
+    camera->longitude = 0.0f;
     camera->viewport_width = width;
     camera->viewport_height = height;
 
     calculate_projection(camera);
+    calculate_rays(camera);
+}
+
+sx_vec3 _camera_euclidean(float latitude, float longitude)
+{
+    float lat_rad = sx_torad(latitude);
+    float lon_rad = sx_torad(longitude);
+    return sx_vec3f(cosf(lat_rad) * sinf(lon_rad), sinf(lat_rad), cosf(lat_rad) * cosf(lon_rad));
+}
+
+void camera_update(Camera *camera, CameraInput *input, float dt)
+{
+    int width = camera->viewport_width;
+    int height = camera->viewport_height;
+
+    camera->position = sx_vec3_add(camera->center, 
+        sx_vec3_mulf(_camera_euclidean(camera->latitude, camera->longitude), camera->distance));
+
     calculate_view(camera);
     calculate_rays(camera);
 }
 
+void camera_orbit(Camera *camera, float delta_x, float delta_y)
+{
+    camera->longitude -= delta_x;
+    if (camera->longitude < 0.0f)
+    {
+        camera->longitude += 360.0f;
+    }
+    if (camera->longitude > 360.0f)
+    {
+        camera->longitude -= 360.0f;
+    }
+    // TODO: set min and max latitude
+    camera->latitude = sx_clamp(-85.0f, camera->latitude + delta_y, 85.0f);
+}
+
+void camera_zoom(Camera *camera, float delta)
+{
+    // TODO: set min and max distance
+    camera->distance = sx_clamp(2.0f, camera->distance + delta, 10.0f);
+}
+
 void calculate_projection(Camera *camera)
 {
-    // float aspect_ratio = camera->viewport_width / camera->viewport_height;
-    // glm_perspective(camera->vertical_fov, aspect_ratio, camera->near_clip, camera->far_clip, camera->projection);
-    // glm_mat4_inv(camera->projection, camera->inv_projection);
+    float aspect_ratio = camera->viewport_width / camera->viewport_height;
+    camera->projection = sx_mat4_perspectiveFOV(sx_torad(camera->vertical_fov), 
+        aspect_ratio, camera->near_clip, camera->far_clip, false);
+    camera->inv_projection = sx_mat4_inv(&camera->projection);
 }
 
 void calculate_view(Camera *camera)
 {
-    // vec3 center;
-    // glm_vec3_add(camera->position, camera->forward, center);
-    // glm_lookat(camera->position, center, (vec3) { 0.0f, 1.0f, 0.0f }, camera->view);
-    // glm_mat4_inv(camera->view, camera->inv_view);
+    camera->view = sx_mat4_view_lookat(camera->position, camera->center, camera->up);
+    camera->inv_view = sx_mat4_inv(&camera->view);
 }
 
 void calculate_rays(Camera *camera)
 {
-    // for (uint32_t y = 0; y < camera->viewport_height; y++)
-    // {
-    //     for (uint32_t x = 0; x < camera->viewport_width; x++)
-    //     {
-    //         float x_coord = (float) x / camera->viewport_width * 2.0f - 1.0f;
-    //         float y_coord = (float) y / camera->viewport_height * 2.0f - 1.0f;
+    for (uint32_t y = 0; y < camera->viewport_height; y++)
+    {
+        for (uint32_t x = 0; x < camera->viewport_width; x++)
+        {
+            float x_coord = (float) x / camera->viewport_width * 2.0f - 1.0f;
+            float y_coord = (float) y / camera->viewport_height * 2.0f - 1.0f;
 
-    //         vec3 _target;
-    //         vec4 target;
-    //         glm_mat4_mulv(camera->inv_projection, (vec4) { x_coord, y_coord, 1.0f, 1.0f }, target);
-    //         glm_vec3(target, _target);
-
-    //         vec4 _direction;
-    //         vec3 direction;
-    //         glm_vec3_divs(_target, target[3], _target);
-    //         glm_vec3_normalize(_target);
-    //         glm_vec4(_target, 0.0f, _direction);
-    //         glm_mat4_mulv(camera->inv_view, _direction, _direction);
-    //         glm_vec3(_direction, direction);
-
-    //         glm_vec3_copy(direction, camera->rays[x + y * camera->viewport_width].direction);
-    //     }
-    // }
+            sx_vec4 target = sx_mat4_mul_vec4(&camera->inv_projection, sx_vec4f(x_coord, y_coord, 1.0f, 1.0f));
+            sx_vec3 a = sx_vec3_norm(sx_vec3_mulf(sx_vec3f(target.x, target.y, target.z), 1.0f / target.w));
+            sx_vec4 ray_direction = sx_mat4_mul_vec4(&camera->inv_view, sx_vec4v3(a, 0.0f));
+            camera->ray_directions[x + y * camera->viewport_width] = sx_vec3f(
+                ray_direction.x, ray_direction.y, ray_direction.z);
+        }
+    }
 }
 
 #endif

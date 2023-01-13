@@ -6,7 +6,7 @@
 #include "sx/sx/math.h"
 #include "camera.h"
 
-sx_color per_pixel(Ray *ray, float x, float y);
+sx_color per_pixel(Ray *ray);
 
 static uint32_t convert_to_RGBA(sx_color color)
 {
@@ -18,10 +18,18 @@ static uint32_t convert_to_RGBA(sx_color color)
     return (color.a << 24) | (color.b << 16) | (color.g << 8) | color.r;
 }
 
+static void clamp_color(sx_color color)
+{
+    sx_clamp(color.r, 0.0f, 1.0f);
+    sx_clamp(color.g, 0.0f, 1.0f);
+    sx_clamp(color.b, 0.0f, 1.0f);
+    sx_clamp(color.a, 0.0f, 1.0f);
+}
+
 void render(uint32_t *pixels, Camera *camera)
 {
     Ray ray;
-    // ray.origin = camera->position;
+    ray.origin = camera->position;
 
     int width = camera->viewport_width;
     int height = camera->viewport_height;
@@ -29,25 +37,16 @@ void render(uint32_t *pixels, Camera *camera)
     {
         for (int x = 0; x < width; x++) 
         {
-            // ray.direction = camera->rays[x + y * width].direction;
-
-            float x_coord = (float) x / camera->viewport_width * 2.0f - 1.0f;
-            float y_coord = (float) y / camera->viewport_height * 2.0f - 1.0f;
-
-            sx_color color = per_pixel(&ray, x_coord, y_coord);
-            sx_clamp(color.r, 0.0f, 1.0f);
-            sx_clamp(color.g, 0.0f, 1.0f);
-            sx_clamp(color.b, 0.0f, 1.0f);
-            sx_clamp(color.a, 0.0f, 1.0f);
+            ray.direction = camera->ray_directions[x + y * width];
+            sx_color color = per_pixel(&ray);
+            clamp_color(color);
             pixels[x + y * width] = convert_to_RGBA(color);
         }
     }
 }
 
-sx_color per_pixel(Ray *ray, float x, float y)
+sx_color per_pixel(Ray *ray)
 {
-    ray->origin = sx_vec3f(0.0f, 0.0f, 1.0f);
-    ray->direction = sx_vec3f(x, y, -1.0f);
     float radius = 0.5f;
     
     float a = sx_vec3_dot(ray->direction, ray->direction);
@@ -61,12 +60,12 @@ sx_color per_pixel(Ray *ray, float x, float y)
     }
 
     float t0 = (-b - sx_sqrt(discriminant)) / (2.0f * a);
-    float t1 = (-b + sx_sqrt(discriminant)) / (2.0f * a); // not used
+    // float t1 = (-b + sx_sqrt(discriminant)) / (2.0f * a); // not used
 
     sx_vec3 hit_point = sx_vec3_add(ray->origin, sx_vec3_mulf(ray->direction, t0));
     sx_vec3 normal = sx_vec3_norm(hit_point);
 
-    sx_vec3 light_direction = sx_vec3_norm(sx_vec3f(-1.0f, -1.0f, -1.0f));
+    sx_vec3 light_direction = sx_vec3_norm(sx_vec3f(-1.0f, 1.0f, 0.0f));
     float light_intensity = sx_max(0.0f, sx_vec3_dot(normal, sx_vec3_neg(light_direction)));
 
     sx_vec3 sphere_color = sx_vec3_mulf(sx_vec3f(1.0f, 0.0f, 1.0f), light_intensity);

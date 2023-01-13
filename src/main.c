@@ -6,7 +6,7 @@
 #include "cimgui/cimgui.h"
 #include "sokol_imgui.h"
 #include "sokol_time.h"
-
+#include "sx/sx/math.h"
 #include "camera.h"
 #include "config.h"
 #include "render.h"
@@ -20,8 +20,10 @@ static struct {
     double last_render_time;
 
     Camera camera;
+    CameraInput input;
 } State;
 
+void event_key(const sapp_event *e);
 void frame_gui();
 void frame_update();
 
@@ -53,24 +55,29 @@ void init()
         }
     };
 
-    camera_init(&State.camera);
+    camera_init(&State.camera, IMAGE_WIDTH, IMAGE_HEIGHT);
 }
 
 void frame() 
 {
-    camera_update(&State.camera, IMAGE_WIDTH, IMAGE_HEIGHT);
-    // frame_update();
+    camera_update(&State.camera, &State.input, sapp_frame_duration());
+    frame_update();
 
     // draw texture quad
-    sgl_viewport(0, 0, sapp_width(), sapp_height(), true);
+    sgl_viewport(0, 0, sapp_width(), sapp_height(), false);
     sgl_defaults();
     sgl_enable_texture();
     sgl_texture(State.image);
     sgl_begin_quads();
+    // sgl_v2f_t2f( -1.0f,  1.0f,  0.0, 0.0);
+    // sgl_v2f_t2f(  1.0f,  1.0f,  0.0, 1.0);
+    // sgl_v2f_t2f(  1.0f, -1.0f,  1.0, 1.0);
+    // sgl_v2f_t2f( -1.0f, -1.0f,  1.0, 0.0);
+
     sgl_v2f_t2f( -1.0f,  1.0f,  0.0, 0.0);
-    sgl_v2f_t2f(  1.0f,  1.0f,  0.0, 1.0);
+    sgl_v2f_t2f(  1.0f,  1.0f,  1.0, 0.0);
     sgl_v2f_t2f(  1.0f, -1.0f,  1.0, 1.0);
-    sgl_v2f_t2f( -1.0f, -1.0f,  1.0, 0.0);    
+    sgl_v2f_t2f( -1.0f, -1.0f,  0.0, 1.0);     
     sgl_end();
 
     sg_begin_default_pass(&State.pass_action, sapp_width(), sapp_height());
@@ -106,12 +113,12 @@ void frame_gui()
         .dpi_scale = sapp_dpi_scale()
     });
         
-    igSetNextWindowSize((ImVec2) { 450, 320 }, ImGuiCond_FirstUseEver);
+    igSetNextWindowSize((ImVec2) { 150, 150 }, ImGuiCond_FirstUseEver);
     igBegin("Settings", NULL, 0);
     igText("Last render: %.3fms", sapp_frame_duration());
     if (igButton("Render", (ImVec2) { 0.0f, 0.0f }))
     {
-        frame_update();
+        // frame_update();
     }    
     igEnd();
 }
@@ -128,6 +135,65 @@ void event(const sapp_event *e)
     if (simgui_handle_event(e))
     {
         return;
+    }
+
+    State.input.movement = sx_vec3f(0.0f, 0.0f, 0.0f);
+
+    switch (e->type)
+    {
+        case SAPP_EVENTTYPE_KEY_DOWN:
+        {
+            event_key(e);
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_DOWN:
+        {
+            if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT)
+            {
+                sapp_lock_mouse(true);
+            }
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_UP:
+        {
+            if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT)
+            {
+                sapp_lock_mouse(false);
+            }
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_SCROLL:
+        {
+            camera_zoom(&State.camera, e->scroll_y * -0.5f);
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_MOVE:
+        {
+            if (sapp_mouse_locked())
+            {
+                camera_orbit(&State.camera, e->mouse_dx * 0.25f, e->mouse_dy * 0.25f);
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+}
+
+void event_key(const sapp_event *e)
+{
+    switch (e->key_code)
+    {
+        case SAPP_KEYCODE_W:
+        {
+            State.input.movement.z = 1.0f;
+        }
+        default:
+        {
+            break;
+        }
     }
 }
 
