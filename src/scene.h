@@ -1,7 +1,7 @@
 #ifndef LAVS_SCENE_H_
 #define LAVS_SCENE_H_
 
-#include "sx/sx/math.h"
+#include "sx/math-vec.h"
 
 #define NUM_SPHERES 2
 

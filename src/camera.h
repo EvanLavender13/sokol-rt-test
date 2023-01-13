@@ -3,7 +3,7 @@
 
 #include "math.h"
 #include "sokol_app.h"
-#include "sx/sx/math-vec.h"
+#include "sx/math-vec.h"
 #include "config.h"
 #include "ray.h"
 

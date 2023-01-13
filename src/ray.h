@@ -1,7 +1,7 @@
 #ifndef LAVS_RAY_H_
 #define LAVS_RAY_H_
 
-#include "sx/sx/math-vec.h"
+#include "sx/math-vec.h"
 
 typedef struct
 {

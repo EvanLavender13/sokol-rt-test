@@ -13,8 +13,11 @@ fips_setup()
 set(sokol_backend SOKOL_GLCORE33)
 set(slang "glsl330")
 
+project(sokol-rt-test C)
+fips_ide_group("libs")
 add_subdirectory(libs)
-include_directories(libs)
+include_directories(libs/sx-lib)
 # add_subdirectory(res)
+fips_ide_group("src")
 add_subdirectory(src)
 

@@ -3,7 +3,7 @@
 
 #include "stdlib.h"
 #include "sokol_gfx.h"
-#include "sx/sx/math.h"
+#include "sx/math-vec.h"
 #include "camera.h"
 #include "scene.h"
 

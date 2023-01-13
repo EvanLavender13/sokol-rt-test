@@ -6,7 +6,7 @@
 #include "cimgui/cimgui.h"
 #include "sokol_imgui.h"
 #include "sokol_time.h"
-#include "sx/sx/math.h"
+#include "sx/math-vec.h"
 #include "camera.h"
 #include "config.h"
 #include "render.h"
@@ -137,8 +137,12 @@ void frame_gui()
     if (igButton("Render", (ImVec2) { 0.0f, 0.0f }))
     {
         // frame_update();
-    }    
+    }
+
+    igText("Scene");
     igEnd();
+
+
 }
 
 void cleanup() 
@@ -154,8 +158,6 @@ void event(const sapp_event *e)
     {
         return;
     }
-
-    State.input.movement = sx_vec3f(0.0f, 0.0f, 0.0f);
 
     switch (e->type)
     {
