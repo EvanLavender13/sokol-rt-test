@@ -10,6 +10,7 @@
 #include "camera.h"
 #include "config.h"
 #include "render.h"
+#include "scene.h"
 
 static struct {
     sg_pass_action pass_action;
@@ -21,6 +22,7 @@ static struct {
 
     Camera camera;
     CameraInput input;
+    Scene scene;
 } State;
 
 void event_key(const sapp_event *e);
@@ -56,6 +58,22 @@ void init()
     };
 
     camera_init(&State.camera, IMAGE_WIDTH, IMAGE_HEIGHT);
+
+    {
+        Sphere sphere;
+        sphere.position = sx_vec3f(0.0f, 0.0f, 0.0f);
+        sphere.radius = 0.5f;
+        sphere.albedo = sx_vec3f(1.0f, 0.0f, 1.0f);
+        State.scene.spheres[0] = sphere;
+    }
+
+    {
+        Sphere sphere;
+        sphere.position = sx_vec3f(1.0f, 0.0f, -5.0f);
+        sphere.radius = 1.5f;
+        sphere.albedo = sx_vec3f(0.2f, 0.3f, 1.0f);
+        State.scene.spheres[1] = sphere;
+    }    
 }
 
 void frame() 
@@ -93,7 +111,7 @@ void frame()
 
 void frame_update()
 {
-    render(State.pixels[0], &State.camera);
+    render(State.pixels[0], &State.scene, &State.camera);
     sg_update_image(State.image, &(sg_image_data)
     {
         .subimage[0][0] = SG_RANGE(State.pixels)

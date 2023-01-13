@@ -78,7 +78,8 @@ void camera_update(Camera *camera, CameraInput *input, float dt)
     camera->position = sx_vec3_add(camera->center, 
         sx_vec3_mulf(_camera_euclidean(camera->latitude, camera->longitude), camera->distance));
 
-    calculate_view(camera);
+    camera->view = sx_mat4_view_lookat(camera->position, camera->center, camera->up);
+    camera->inv_view = sx_mat4_inv(&camera->view);    
     calculate_rays(camera);
 }
 
@@ -109,12 +110,6 @@ void calculate_projection(Camera *camera)
     camera->projection = sx_mat4_perspectiveFOV(sx_torad(camera->vertical_fov), 
         aspect_ratio, camera->near_clip, camera->far_clip, false);
     camera->inv_projection = sx_mat4_inv(&camera->projection);
-}
-
-void calculate_view(Camera *camera)
-{
-    camera->view = sx_mat4_view_lookat(camera->position, camera->center, camera->up);
-    camera->inv_view = sx_mat4_inv(&camera->view);
 }
 
 void calculate_rays(Camera *camera)
