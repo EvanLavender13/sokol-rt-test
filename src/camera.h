@@ -5,6 +5,7 @@
 #include "sokol_app.h"
 #include "sx/math-vec.h"
 #include "config.h"
+#include "input.h"
 #include "ray.h"
 
 typedef struct 
@@ -33,15 +34,9 @@ typedef struct
     sx_vec3 ray_directions[IMAGE_WIDTH * IMAGE_HEIGHT];
 } Camera;
 
-typedef struct
-{
-    sx_vec2 mouse_position;
-    sx_vec2 last_mouse_position;
-    sx_vec3 movement;
-} CameraInput;
-
-void calculate_projection(Camera *camera);
+void calculate_position(Camera *camera);
 void calculate_view(Camera *camera);
+void calculate_projection(Camera *camera);
 void calculate_rays(Camera *camera);
 
 void camera_init(Camera *camera, uint32_t width, uint32_t height)
@@ -59,6 +54,8 @@ void camera_init(Camera *camera, uint32_t width, uint32_t height)
     camera->viewport_width = width;
     camera->viewport_height = height;
 
+    calculate_position(camera);
+    calculate_view(camera);
     calculate_projection(camera);
     calculate_rays(camera);
 }
@@ -68,19 +65,6 @@ sx_vec3 _camera_euclidean(float latitude, float longitude)
     float lat_rad = sx_torad(latitude);
     float lon_rad = sx_torad(longitude);
     return sx_vec3f(cosf(lat_rad) * sinf(lon_rad), sinf(lat_rad), cosf(lat_rad) * cosf(lon_rad));
-}
-
-void camera_update(Camera *camera, CameraInput *input, float dt)
-{
-    int width = camera->viewport_width;
-    int height = camera->viewport_height;
-
-    camera->position = sx_vec3_add(camera->center, 
-        sx_vec3_mulf(_camera_euclidean(camera->latitude, camera->longitude), camera->distance));
-
-    camera->view = sx_mat4_view_lookat(camera->position, camera->center, camera->up);
-    camera->inv_view = sx_mat4_inv(&camera->view);    
-    calculate_rays(camera);
 }
 
 void camera_orbit(Camera *camera, float delta_x, float delta_y)
@@ -104,12 +88,24 @@ void camera_zoom(Camera *camera, float delta)
     camera->distance = sx_clamp(2.0f, camera->distance + delta, 10.0f);
 }
 
+void calculate_position(Camera *camera)
+{
+    camera->position = sx_vec3_add(camera->center, 
+        sx_vec3_mulf(_camera_euclidean(camera->latitude, camera->longitude), camera->distance));
+}
+
 void calculate_projection(Camera *camera)
 {
     float aspect_ratio = camera->viewport_width / camera->viewport_height;
     camera->projection = sx_mat4_perspectiveFOV(sx_torad(camera->vertical_fov), 
         aspect_ratio, camera->near_clip, camera->far_clip, false);
     camera->inv_projection = sx_mat4_inv(&camera->projection);
+}
+
+void calculate_view(Camera *camera)
+{
+    camera->view = sx_mat4_view_lookat(camera->position, camera->center, camera->up);
+    camera->inv_view = sx_mat4_inv(&camera->view);
 }
 
 void calculate_rays(Camera *camera)
@@ -128,6 +124,44 @@ void calculate_rays(Camera *camera)
                 ray_direction.x, ray_direction.y, ray_direction.z);
         }
     }
+}
+
+void camera_update(Camera *camera, float dt)
+{
+    bool moved = false;
+    const sapp_event *e = Input.event;
+    if (e == NULL) return;
+    switch (e->type)
+    {
+        case SAPP_EVENTTYPE_MOUSE_SCROLL:
+        {
+            camera_zoom(camera, e->scroll_y * -1.0f);
+            moved = true;
+            break;
+        }
+        case SAPP_EVENTTYPE_MOUSE_MOVE:
+        {
+            if (sapp_mouse_locked())
+            {
+                camera_orbit(camera, e->mouse_dx * 1.0f, e->mouse_dy * 1.0f);
+                moved = true;
+            }
+            break;
+        }
+        default:
+        {
+            break;
+        }
+    }
+
+    if (moved) 
+    {
+        calculate_position(camera);
+        calculate_view(camera);
+        calculate_rays(camera);
+    }
+
+    Input.event = NULL;
 }
 
 #endif

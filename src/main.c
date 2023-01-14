@@ -9,6 +9,7 @@
 #include "sx/math-vec.h"
 #include "camera.h"
 #include "config.h"
+#include "input.h"
 #include "render.h"
 #include "scene.h"
 
@@ -21,11 +22,9 @@ static struct {
     double last_render_time;
 
     Camera camera;
-    CameraInput input;
     Scene scene;
 } State;
 
-void event_key(const sapp_event *e);
 void frame_gui();
 void frame_update();
 
@@ -78,7 +77,7 @@ void init()
 
 void frame() 
 {
-    camera_update(&State.camera, &State.input, sapp_frame_duration());
+    camera_update(&State.camera, sapp_frame_duration());
     frame_update();
 
     // draw texture quad
@@ -87,11 +86,6 @@ void frame()
     sgl_enable_texture();
     sgl_texture(State.image);
     sgl_begin_quads();
-    // sgl_v2f_t2f( -1.0f,  1.0f,  0.0, 0.0);
-    // sgl_v2f_t2f(  1.0f,  1.0f,  0.0, 1.0);
-    // sgl_v2f_t2f(  1.0f, -1.0f,  1.0, 1.0);
-    // sgl_v2f_t2f( -1.0f, -1.0f,  1.0, 0.0);
-
     sgl_v2f_t2f( -1.0f,  1.0f,  0.0, 0.0);
     sgl_v2f_t2f(  1.0f,  1.0f,  1.0, 0.0);
     sgl_v2f_t2f(  1.0f, -1.0f,  1.0, 1.0);
@@ -101,9 +95,7 @@ void frame()
     sg_begin_default_pass(&State.pass_action, sapp_width(), sapp_height());
     sgl_draw();
 
-    // draw gui
-    frame_gui();
-    simgui_render();    
+    frame_gui(); 
 
     sg_end_pass();
     sg_commit();
@@ -117,8 +109,8 @@ void frame_update()
         .subimage[0][0] = SG_RANGE(State.pixels)
     });
 
-    stm_laptime(&State.last_time);
-    State.last_render_time = stm_ms(State.last_time);
+    uint64_t frame_time = stm_laptime(&State.last_time);
+    State.last_render_time = stm_ms(frame_time);
 }
 
 void frame_gui()
@@ -131,18 +123,27 @@ void frame_gui()
         .dpi_scale = sapp_dpi_scale()
     });
         
-    igSetNextWindowSize((ImVec2) { 150, 150 }, ImGuiCond_FirstUseEver);
+    igSetNextWindowSize((ImVec2) { 250, 250 }, ImGuiCond_FirstUseEver);
     igBegin("Settings", NULL, 0);
-    igText("Last render: %.3fms", sapp_frame_duration());
+    igText("Last render: %.3fms", State.last_render_time);
     if (igButton("Render", (ImVec2) { 0.0f, 0.0f }))
     {
         // frame_update();
     }
 
     igText("Scene");
+    for (int i = 0; i < NUM_SPHERES; i++) {
+        igPushID_Int(i);
+        Sphere *sphere = &State.scene.spheres[i];
+        igSliderFloat3("Position", (float*) &sphere->position, -10.0f, 10.0f, "%.3f", ImGuiSliderFlags_None);
+        igSliderFloat("Radius", &sphere->radius, 0.1f, 5.0f, "%.3f", ImGuiSliderFlags_None);
+        igColorEdit3("Albedo", (float*) &sphere->albedo, ImGuiColorEditFlags_None);
+        igSeparator();
+        igPopID();
+    }
     igEnd();
 
-
+    simgui_render();
 }
 
 void cleanup() 
@@ -161,11 +162,6 @@ void event(const sapp_event *e)
 
     switch (e->type)
     {
-        case SAPP_EVENTTYPE_KEY_DOWN:
-        {
-            event_key(e);
-            break;
-        }
         case SAPP_EVENTTYPE_MOUSE_DOWN:
         {
             if (e->mouse_button == SAPP_MOUSEBUTTON_LEFT)
@@ -182,39 +178,13 @@ void event(const sapp_event *e)
             }
             break;
         }
-        case SAPP_EVENTTYPE_MOUSE_SCROLL:
-        {
-            camera_zoom(&State.camera, e->scroll_y * -0.5f);
-            break;
-        }
-        case SAPP_EVENTTYPE_MOUSE_MOVE:
-        {
-            if (sapp_mouse_locked())
-            {
-                camera_orbit(&State.camera, e->mouse_dx * 0.25f, e->mouse_dy * 0.25f);
-            }
-            break;
-        }
         default:
         {
             break;
         }
     }
-}
 
-void event_key(const sapp_event *e)
-{
-    switch (e->key_code)
-    {
-        case SAPP_KEYCODE_W:
-        {
-            State.input.movement.z = 1.0f;
-        }
-        default:
-        {
-            break;
-        }
-    }
+    Input.event = e;
 }
 
 sapp_desc sokol_main(int argc, char *argv[]) 
