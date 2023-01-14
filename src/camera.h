@@ -19,7 +19,7 @@ typedef struct
     float near_clip;
     float far_clip;
 
-    sx_vec3 center;
+    sx_vec3 *center;
     sx_vec3 position;
     sx_vec3 forward;
     sx_vec3 up;
@@ -34,18 +34,19 @@ typedef struct
     sx_vec3 ray_directions[IMAGE_WIDTH * IMAGE_HEIGHT];
 } Camera;
 
-void calculate_position(Camera *camera);
-void calculate_view(Camera *camera);
-void calculate_projection(Camera *camera);
-void calculate_rays(Camera *camera);
+void camera_calculate(Camera *camera);
+void _calculate_position(Camera *camera);
+void _calculate_view(Camera *camera);
+void _calculate_projection(Camera *camera);
+void _calculate_rays(Camera *camera);
 
 void camera_init(Camera *camera, uint32_t width, uint32_t height)
 {
     camera->vertical_fov = 45.0f;
     camera->near_clip = 0.1f;
     camera->far_clip = 100.0f;
-    camera->center = sx_vec3f(0.0f, 0.0f, 0.0f);
-    camera->position = sx_vec3f(0.0f, 0.0f, 3.0f);
+    camera->center = &SX_VEC3_ZERO;
+    camera->position = SX_VEC3_ZERO;
     camera->forward = sx_vec3f(0.0f, 0.0f, -1.0f);
     camera->up = sx_vec3f(0.0f, 1.0f, 0.0f);
     camera->distance = 5.0f;
@@ -54,10 +55,15 @@ void camera_init(Camera *camera, uint32_t width, uint32_t height)
     camera->viewport_width = width;
     camera->viewport_height = height;
 
-    calculate_position(camera);
-    calculate_view(camera);
-    calculate_projection(camera);
-    calculate_rays(camera);
+    _calculate_projection(camera);
+    camera_calculate(camera);
+}
+
+void camera_calculate(Camera *camera)
+{
+    _calculate_position(camera);
+    _calculate_view(camera);
+    _calculate_rays(camera);
 }
 
 sx_vec3 _camera_euclidean(float latitude, float longitude)
@@ -88,13 +94,13 @@ void camera_zoom(Camera *camera, float delta)
     camera->distance = sx_clamp(2.0f, camera->distance + delta, 10.0f);
 }
 
-void calculate_position(Camera *camera)
+void _calculate_position(Camera *camera)
 {
-    camera->position = sx_vec3_add(camera->center, 
+    camera->position = sx_vec3_add(*camera->center, 
         sx_vec3_mulf(_camera_euclidean(camera->latitude, camera->longitude), camera->distance));
 }
 
-void calculate_projection(Camera *camera)
+void _calculate_projection(Camera *camera)
 {
     float aspect_ratio = camera->viewport_width / camera->viewport_height;
     camera->projection = sx_mat4_perspectiveFOV(sx_torad(camera->vertical_fov), 
@@ -102,13 +108,13 @@ void calculate_projection(Camera *camera)
     camera->inv_projection = sx_mat4_inv(&camera->projection);
 }
 
-void calculate_view(Camera *camera)
+void _calculate_view(Camera *camera)
 {
-    camera->view = sx_mat4_view_lookat(camera->position, camera->center, camera->up);
+    camera->view = sx_mat4_view_lookat(camera->position, *camera->center, camera->up);
     camera->inv_view = sx_mat4_inv(&camera->view);
 }
 
-void calculate_rays(Camera *camera)
+void _calculate_rays(Camera *camera)
 {
     for (uint32_t y = 0; y < camera->viewport_height; y++)
     {
@@ -126,42 +132,45 @@ void calculate_rays(Camera *camera)
     }
 }
 
-void camera_update(Camera *camera, float dt)
+bool camera_update(Camera *camera, float dt)
 {
-    bool moved = false;
+    UNUSED(dt);
+    bool moved = true;
     const sapp_event *e = Input.event;
-    if (e == NULL) return;
-    switch (e->type)
+    if (e != NULL)
     {
-        case SAPP_EVENTTYPE_MOUSE_SCROLL:
+        switch (e->type)
         {
-            camera_zoom(camera, e->scroll_y * -1.0f);
-            moved = true;
-            break;
-        }
-        case SAPP_EVENTTYPE_MOUSE_MOVE:
-        {
-            if (sapp_mouse_locked())
+            case SAPP_EVENTTYPE_MOUSE_SCROLL:
             {
-                camera_orbit(camera, e->mouse_dx * 1.0f, e->mouse_dy * 1.0f);
+                camera_zoom(camera, e->scroll_y * -1.0f);
                 moved = true;
+                break;
             }
-            break;
-        }
-        default:
-        {
-            break;
+            case SAPP_EVENTTYPE_MOUSE_MOVE:
+            {
+                if (sapp_mouse_locked())
+                {
+                    camera_orbit(camera, e->mouse_dx * 1.0f, e->mouse_dy * 1.0f);
+                    moved = true;
+                }
+                break;
+            }
+            default:
+            {
+                break;
+            }
         }
     }
 
-    if (moved) 
+    if (moved)
     {
-        calculate_position(camera);
-        calculate_view(camera);
-        calculate_rays(camera);
+        camera_calculate(camera);
     }
 
     Input.event = NULL;
+
+    return moved;
 }
 
 #endif

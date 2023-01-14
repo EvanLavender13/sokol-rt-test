@@ -1,3 +1,4 @@
+#include "omp.h"
 #include "sokol_app.h"
 #include "sokol_gfx.h"
 #include "sokol_gl.h"
@@ -12,6 +13,7 @@
 #include "input.h"
 #include "render.h"
 #include "scene.h"
+#include "sim.h"
 
 static struct {
     sg_pass_action pass_action;
@@ -23,6 +25,7 @@ static struct {
 
     Camera camera;
     Scene scene;
+    // SimData sim_data;
 } State;
 
 void frame_gui();
@@ -56,28 +59,52 @@ void init()
         }
     };
 
-    camera_init(&State.camera, IMAGE_WIDTH, IMAGE_HEIGHT);
+    Material pink_sphere;
+    pink_sphere.albedo = sx_vec3f(1.0f, 0.0f, 1.0f);
+    pink_sphere.roughness = 0.0f;
+    State.scene.materials[0] = pink_sphere;
+
+    Material blue_sphere;
+    blue_sphere.albedo = sx_vec3f(0.2f, 0.3f, 1.0f);
+    blue_sphere.roughness = 0.01f;
+    State.scene.materials[1] = blue_sphere;
 
     {
         Sphere sphere;
-        sphere.position = sx_vec3f(0.0f, 0.0f, 0.0f);
-        sphere.radius = 0.5f;
-        sphere.albedo = sx_vec3f(1.0f, 0.0f, 1.0f);
+        sphere.position = sx_vec3f(0.0f, 10.0f, 0.0f);
+        sphere.velocity = sx_vec3f(0.0f, 0.0f, 0.0f);
+        sphere.radius = 1.0f;
+        sphere.material_index = 0;
         State.scene.spheres[0] = sphere;
     }
 
     {
         Sphere sphere;
-        sphere.position = sx_vec3f(1.0f, 0.0f, -5.0f);
-        sphere.radius = 1.5f;
-        sphere.albedo = sx_vec3f(0.2f, 0.3f, 1.0f);
+        sphere.position = sx_vec3f(0.0f, -101.0f, 0.0f);
+        sphere.velocity = sx_vec3f(0.0f, 0.0f, 0.0f);
+        sphere.radius = 100.0f;
+        sphere.material_index = 1;
         State.scene.spheres[1] = sphere;
-    }    
+    }
+
+    // State.sim_data.num_objects = 1;
+    // State.sim_data.positions = malloc(1 * sizeof(sx_vec3)); // freed in sim_shutdown()
+    // State.sim_data.positions[0] = &State.scene.spheres[0].position;
+
+    // State.sim_data.velocities = malloc(1 * sizeof(sx_vec3));
+    // State.sim_data.velocities[0] = &State.scene.spheres[0].velocity;
+    render_reset();
+    camera_init(&State.camera, IMAGE_WIDTH, IMAGE_HEIGHT);
+    State.camera.center = &State.scene.spheres[0].position;
+    sim_init(&State.scene);
 }
 
 void frame() 
 {
-    camera_update(&State.camera, sapp_frame_duration());
+    if (camera_update(&State.camera, sapp_frame_duration()))
+    {
+        render_reset();
+    }
     frame_update();
 
     // draw texture quad
@@ -86,23 +113,23 @@ void frame()
     sgl_enable_texture();
     sgl_texture(State.image);
     sgl_begin_quads();
-    sgl_v2f_t2f( -1.0f,  1.0f,  0.0, 0.0);
-    sgl_v2f_t2f(  1.0f,  1.0f,  1.0, 0.0);
-    sgl_v2f_t2f(  1.0f, -1.0f,  1.0, 1.0);
-    sgl_v2f_t2f( -1.0f, -1.0f,  0.0, 1.0);     
+    sgl_v2f_t2f( -1.0f,  1.0f,  0.0, 1.0);
+    sgl_v2f_t2f(  1.0f,  1.0f,  1.0, 1.0);
+    sgl_v2f_t2f(  1.0f, -1.0f,  1.0, 0.0);
+    sgl_v2f_t2f( -1.0f, -1.0f,  0.0, 0.0);    
     sgl_end();
 
     sg_begin_default_pass(&State.pass_action, sapp_width(), sapp_height());
     sgl_draw();
-
     frame_gui(); 
-
     sg_end_pass();
     sg_commit();
 }
 
 void frame_update()
 {
+    sim_update(sapp_frame_duration());
+    // render_reset();
     render(State.pixels[0], &State.scene, &State.camera);
     sg_update_image(State.image, &(sg_image_data)
     {
@@ -123,21 +150,36 @@ void frame_gui()
         .dpi_scale = sapp_dpi_scale()
     });
         
-    igSetNextWindowSize((ImVec2) { 250, 250 }, ImGuiCond_FirstUseEver);
+    igSetNextWindowSize((ImVec2) { 250, 300 }, ImGuiCond_FirstUseEver);
     igBegin("Settings", NULL, 0);
     igText("Last render: %.3fms", State.last_render_time);
-    if (igButton("Render", (ImVec2) { 0.0f, 0.0f }))
+    if (igButton("Reset", (ImVec2) { 0.0f, 0.0f }))
     {
-        // frame_update();
+        render_reset();
     }
 
     igText("Scene");
-    for (int i = 0; i < NUM_SPHERES; i++) {
+    for (int i = 0; i < NUM_MATERIALS; i++)
+    {
+        igPushID_Int(i);
+        Material *material = &State.scene.materials[i];
+        igColorEdit3("Albedo", (float*) &material->albedo, ImGuiColorEditFlags_None);
+        igDragFloat("Roughness", &material->roughness, 0.01f, 0.0f, 1.0f, "%.3f", ImGuiSliderFlags_None);
+        igSeparator();
+        igPopID();
+    }
+    for (int i = 0; i < NUM_SPHERES; i++) 
+    {
         igPushID_Int(i);
         Sphere *sphere = &State.scene.spheres[i];
-        igSliderFloat3("Position", (float*) &sphere->position, -10.0f, 10.0f, "%.3f", ImGuiSliderFlags_None);
-        igSliderFloat("Radius", &sphere->radius, 0.1f, 5.0f, "%.3f", ImGuiSliderFlags_None);
-        igColorEdit3("Albedo", (float*) &sphere->albedo, ImGuiColorEditFlags_None);
+        igDragFloat3("Position", (float*) &sphere->position, 0.01f, -10.0f, 10.0f, "%.3f", ImGuiSliderFlags_None);
+        igDragFloat("Radius", &sphere->radius, 0.01f, 0.1f, 5.0f, "%.3f", ImGuiSliderFlags_None);
+        if (igButton("Center", (ImVec2) { 0.0f, 0.0f }))
+        {
+            State.camera.center = &sphere->position;
+            camera_calculate(&State.camera);
+            render_reset();
+        }
         igSeparator();
         igPopID();
     }
@@ -148,6 +190,7 @@ void frame_gui()
 
 void cleanup() 
 {
+    sim_shutdown();
     simgui_shutdown();
     sgl_shutdown();
     sg_shutdown();
@@ -157,6 +200,7 @@ void event(const sapp_event *e)
 {
     if (simgui_handle_event(e))
     {
+        sapp_lock_mouse(false);
         return;
     }
 
@@ -197,8 +241,8 @@ sapp_desc sokol_main(int argc, char *argv[])
         .frame_cb = frame,
         .cleanup_cb = cleanup,
         .event_cb = event,
-        .width = IMAGE_WIDTH,
-        .height = IMAGE_HEIGHT,
+        .width = 1200,
+        .height = 800,
         .window_title = "sokol-rt-test app"
     };
 }
